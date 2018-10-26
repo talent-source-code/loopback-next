@@ -3,15 +3,24 @@
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
-import {expect} from '@loopback/testlab';
-import {Application, Server, Component, CoreBindings} from '../..';
 import {
-  Context,
-  Constructor,
   Binding,
-  Provider,
+  Constructor,
+  Context,
   inject,
+  Provider,
+  BindingScope,
 } from '@loopback/context';
+import {expect} from '@loopback/testlab';
+import {
+  Application,
+  Component,
+  CoreBindings,
+  CoreTags,
+  Server,
+  LifeCycleObserver,
+  asLifeCycleObserverBinding,
+} from '../..';
 
 describe('Application', () => {
   describe('controller binding', () => {
@@ -22,16 +31,20 @@ describe('Application', () => {
 
     it('binds a controller', () => {
       const binding = app.controller(MyController);
-      expect(Array.from(binding.tagNames)).to.containEql('controller');
+      expect(Array.from(binding.tagNames)).to.containEql(CoreTags.CONTROLLER);
       expect(binding.key).to.equal('controllers.MyController');
-      expect(findKeysByTag(app, 'controller')).to.containEql(binding.key);
+      expect(findKeysByTag(app, CoreTags.CONTROLLER)).to.containEql(
+        binding.key,
+      );
     });
 
     it('binds a controller with custom name', () => {
       const binding = app.controller(MyController, 'my-controller');
-      expect(Array.from(binding.tagNames)).to.containEql('controller');
+      expect(Array.from(binding.tagNames)).to.containEql(CoreTags.CONTROLLER);
       expect(binding.key).to.equal('controllers.my-controller');
-      expect(findKeysByTag(app, 'controller')).to.containEql(binding.key);
+      expect(findKeysByTag(app, CoreTags.CONTROLLER)).to.containEql(
+        binding.key,
+      );
     });
 
     function givenApp() {
@@ -48,14 +61,14 @@ describe('Application', () => {
 
     it('binds a component', () => {
       app.component(MyComponent);
-      expect(findKeysByTag(app, 'component')).to.containEql(
+      expect(findKeysByTag(app, CoreTags.COMPONENT)).to.containEql(
         'components.MyComponent',
       );
     });
 
     it('binds a component with custom name', () => {
       app.component(MyComponent, 'my-component');
-      expect(findKeysByTag(app, 'component')).to.containEql(
+      expect(findKeysByTag(app, CoreTags.COMPONENT)).to.containEql(
         'components.my-component',
       );
     });
@@ -136,7 +149,7 @@ describe('Application', () => {
     it('defaults to constructor name', async () => {
       const app = new Application();
       const binding = app.server(FakeServer);
-      expect(Array.from(binding.tagNames)).to.containEql('server');
+      expect(Array.from(binding.tagNames)).to.containEql(CoreTags.SERVER);
       const result = await app.getServer(FakeServer.name);
       expect(result.constructor.name).to.equal(FakeServer.name);
     });
@@ -152,8 +165,8 @@ describe('Application', () => {
     it('allows binding of multiple servers as an array', async () => {
       const app = new Application();
       const bindings = app.servers([FakeServer, AnotherServer]);
-      expect(Array.from(bindings[0].tagNames)).to.containEql('server');
-      expect(Array.from(bindings[1].tagNames)).to.containEql('server');
+      expect(Array.from(bindings[0].tagNames)).to.containEql(CoreTags.SERVER);
+      expect(Array.from(bindings[1].tagNames)).to.containEql(CoreTags.SERVER);
       const fakeResult = await app.getServer(FakeServer);
       expect(fakeResult.constructor.name).to.equal(FakeServer.name);
       const AnotherResult = await app.getServer(AnotherServer);
@@ -165,12 +178,60 @@ describe('Application', () => {
     it('starts all injected servers', async () => {
       const app = new Application();
       app.component(FakeComponent);
-
+      const component = await app.get<FakeComponent>(
+        `${CoreBindings.COMPONENTS}.FakeComponent`,
+      );
+      expect(component.status).to.equal('not-initialized');
       await app.start();
       const server = await app.getServer(FakeServer);
+
+      expect(server).to.not.be.null();
+      expect(server.listening).to.equal(true);
+      expect(component.status).to.equal('started');
+      await app.stop();
+    });
+
+    it('starts servers bound with `LIFE_CYCLE_OBSERVER` tag', async () => {
+      const app = new Application();
+      app
+        .bind('fake-server')
+        .toClass(FakeServer)
+        .tag(CoreTags.LIFE_CYCLE_OBSERVER, CoreTags.SERVER)
+        .inScope(BindingScope.SINGLETON);
+      await app.start();
+      const server = await app.get<FakeServer>('fake-server');
+
       expect(server).to.not.be.null();
       expect(server.listening).to.equal(true);
       await app.stop();
+    });
+
+    it('starts/stops all registered components', async () => {
+      const app = new Application();
+      app.component(FakeComponent);
+      const component = await app.get<FakeComponent>(
+        `${CoreBindings.COMPONENTS}.FakeComponent`,
+      );
+      expect(component.status).to.equal('not-initialized');
+      await app.start();
+      expect(component.status).to.equal('started');
+      await app.stop();
+      expect(component.status).to.equal('stopped');
+    });
+
+    it('starts/stops all registered life cycle observers', async () => {
+      const app = new Application();
+      app
+        .bind('my-observer')
+        .toClass(MyObserver)
+        .apply(asLifeCycleObserverBinding);
+
+      const observer = await app.get<MyObserver>('my-observer');
+      expect(observer.status).to.equal('not-initialized');
+      await app.start();
+      expect(observer.status).to.equal('started');
+      await app.stop();
+      expect(observer.status).to.equal('stopped');
     });
 
     it('does not attempt to start poorly named bindings', async () => {
@@ -190,6 +251,7 @@ describe('Application', () => {
 });
 
 class FakeComponent implements Component {
+  status = 'not-initialized';
   servers: {
     [name: string]: Constructor<Server>;
   };
@@ -198,6 +260,12 @@ class FakeComponent implements Component {
       FakeServer,
       FakeServer2: FakeServer,
     };
+  }
+  start() {
+    this.status = 'started';
+  }
+  stop() {
+    this.status = 'stopped';
   }
 }
 
@@ -216,3 +284,14 @@ class FakeServer extends Context implements Server {
 }
 
 class AnotherServer extends FakeServer {}
+
+class MyObserver implements LifeCycleObserver {
+  status = 'not-initialized';
+
+  start() {
+    this.status = 'started';
+  }
+  stop() {
+    this.status = 'stopped';
+  }
+}
