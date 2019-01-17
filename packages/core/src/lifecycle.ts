@@ -5,7 +5,9 @@
 
 import {
   Binding,
+  BindingFilter,
   BindingScope,
+  BindingType,
   Constructor,
   ValueOrPromise,
 } from '@loopback/context';
@@ -61,3 +63,12 @@ export function asLifeCycleObserverBinding<T = unknown>(binding: Binding<T>) {
     .tag(CoreTags.LIFE_CYCLE_OBSERVER)
     .inScope(BindingScope.SINGLETON);
 }
+
+/**
+ * Find all life cycle observer bindings. By default, a constant or singleton
+ * binding tagged with `CoreTags.LIFE_CYCLE_OBSERVER`
+ */
+export const lifeCycleObserverFilter: BindingFilter = binding =>
+  (binding.type === BindingType.CONSTANT ||
+    binding.scope === BindingScope.SINGLETON) &&
+  binding.tagMap[CoreTags.LIFE_CYCLE_OBSERVER] != null;

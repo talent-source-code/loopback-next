@@ -3,15 +3,9 @@
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
-import {
-  Binding,
-  BindingScope,
-  BindingType,
-  Context,
-  inject,
-} from '@loopback/context';
-import {CoreTags, CoreBindings} from './keys';
-import {LifeCycleObserver} from './lifecycle';
+import {Binding, ContextView, inject} from '@loopback/context';
+import {CoreBindings, CoreTags} from './keys';
+import {LifeCycleObserver, lifeCycleObserverFilter} from './lifecycle';
 import debugFactory = require('debug');
 const debug = debugFactory('loopback:core:lifecycle');
 
@@ -48,8 +42,8 @@ export type LifeCycleObserverOptions = {
  */
 export class LifeCycleObserverRegistry implements LifeCycleObserver {
   constructor(
-    @inject.context()
-    protected ctx: Context,
+    @inject.view(lifeCycleObserverFilter)
+    protected observersView: ContextView<LifeCycleObserver>,
     @inject(CoreBindings.LIFE_CYCLE_OBSERVER_OPTIONS, {optional: true})
     protected options: LifeCycleObserverOptions = {
       parallel: true,
@@ -62,23 +56,10 @@ export class LifeCycleObserverRegistry implements LifeCycleObserver {
   }
 
   /**
-   * Find all life cycle observer bindings. By default, a constant or singleton
-   * binding tagged with `CoreTags.LIFE_CYCLE_OBSERVER`
-   */
-  findObserverBindings() {
-    return this.ctx.find<LifeCycleObserver>(
-      binding =>
-        (binding.type === BindingType.CONSTANT ||
-          binding.scope === BindingScope.SINGLETON) &&
-        binding.tagMap[CoreTags.LIFE_CYCLE_OBSERVER] != null,
-    );
-  }
-
-  /**
    * Get observer groups ordered by the group
    */
-  getObserverGroupsByOrder(): LifeCycleObserverGroup[] {
-    const bindings = this.findObserverBindings();
+  protected getObserverGroupsByOrder(): LifeCycleObserverGroup[] {
+    const bindings = this.observersView.bindings;
     const groups = this.sortObserverBindingsByGroup(bindings);
     if (debug.enabled) {
       debug(
@@ -120,7 +101,7 @@ export class LifeCycleObserverRegistry implements LifeCycleObserver {
    * and stop them in the reverse order
    * @param bindings Life cycle observer bindings
    */
-  sortObserverBindingsByGroup(
+  protected sortObserverBindingsByGroup(
     bindings: Readonly<Binding<LifeCycleObserver>>[],
   ) {
     // Group bindings in a map
@@ -139,8 +120,8 @@ export class LifeCycleObserverRegistry implements LifeCycleObserver {
     }
     // Create an array for group entries
     const groups: LifeCycleObserverGroup[] = [];
-    for (const entry of groupMap.entries()) {
-      groups.push({group: entry[0], bindings: entry[1]});
+    for (const [group, bindingsInGroup] of groupMap) {
+      groups.push({group, bindings: bindingsInGroup});
     }
     // Sort the groups
     return groups.sort((g1, g2) => {
@@ -163,39 +144,31 @@ export class LifeCycleObserverRegistry implements LifeCycleObserver {
    * @param group A group of bindings for life cycle observers
    * @param event Event name
    */
-  async notifyObserverGroup(
-    group: LifeCycleObserverGroup,
+  protected async notifyObservers(
+    observers: LifeCycleObserver[],
+    bindings: Readonly<Binding<LifeCycleObserver>>[],
     event: keyof LifeCycleObserver,
   ) {
-    debug(
-      'Notifying life cycle observer group %s of "%s" event...',
-      group.group,
-      event,
-    );
-    const notifiers: Promise<void>[] = [];
-    for (const b of group.bindings) {
-      const notifyObserver = async (
-        binding: Readonly<Binding<LifeCycleObserver>>,
-      ) => {
-        const observer = await this.ctx.get<LifeCycleObserver>(binding.key);
-        debug('Notifying binding %s of "%s" event...', binding.key, event);
+    if (!this.options.parallel) {
+      let index = 0;
+      for (const observer of observers) {
+        debug(
+          'Invoking %s observer for binding %s',
+          event,
+          bindings[index].key,
+        );
+        index++;
         await this.invokeObserver(observer, event);
-        debug('Binding %s has processed "%s" event.', binding.key, event);
-      };
-      if (this.options.parallel) {
-        notifiers.push(notifyObserver(b));
-      } else {
-        await notifyObserver(b);
       }
+      return;
     }
-    if (this.options.parallel) {
-      await Promise.all(notifiers);
-    }
-    debug(
-      'Life cycle observer group %s has processed "%s" event.',
-      group.group,
-      event,
-    );
+
+    // Parallel invocation
+    const notifiers = observers.map((observer, index) => {
+      debug('Invoking %s observer for binding %s', event, bindings[index].key);
+      return this.invokeObserver(observer, event);
+    });
+    await Promise.all(notifiers);
   }
 
   /**
@@ -220,13 +193,26 @@ export class LifeCycleObserverRegistry implements LifeCycleObserver {
   protected async notifyGroups(
     events: (keyof LifeCycleObserver)[],
     groups: LifeCycleObserverGroup[],
+    reverse = false,
   ) {
-    for (const event of events) {
-      debug('Beginning %s %s...', event, this.ctx.name);
-      for (const g of groups) {
-        await this.notifyObserverGroup(g, event);
+    const observers = await this.observersView.values();
+    const bindings = this.observersView.bindings;
+    if (reverse) groups = groups.reverse();
+    for (const group of groups) {
+      const observersForGroup: LifeCycleObserver[] = [];
+      const bindingsInGroup = reverse
+        ? group.bindings.reverse()
+        : group.bindings;
+      for (const binding of bindingsInGroup) {
+        const index = bindings.indexOf(binding);
+        observersForGroup.push(observers[index]);
       }
-      debug('Finished %s %s', event, this.ctx.name);
+
+      for (const event of events) {
+        debug('Beginning notification %s of %s...', event);
+        await this.notifyObservers(observersForGroup, group.bindings, event);
+        debug('Finished notification %s of %s', event);
+      }
     }
   }
 
@@ -236,7 +222,7 @@ export class LifeCycleObserverRegistry implements LifeCycleObserver {
    * @returns {Promise}
    */
   public async start(): Promise<void> {
-    debug('Starting the %s...', this.ctx.name);
+    debug('Starting the %s...');
     const groups = this.getObserverGroupsByOrder();
     await this.notifyGroups(['preStart', 'start', 'postStart'], groups);
   }
@@ -247,9 +233,9 @@ export class LifeCycleObserverRegistry implements LifeCycleObserver {
    * @returns {Promise}
    */
   public async stop(): Promise<void> {
-    debug('Stopping the %s...', this.ctx.name);
-    const groups = this.getObserverGroupsByOrder().reverse();
+    debug('Stopping the %s...');
+    const groups = this.getObserverGroupsByOrder();
     // Stop in the reverse order
-    await this.notifyGroups(['preStop', 'stop', 'postStop'], groups);
+    await this.notifyGroups(['preStop', 'stop', 'postStop'], groups, true);
   }
 }
