@@ -42,6 +42,7 @@ import {
   RouteEntry,
   RoutingTable,
   StaticAssetsRoute,
+  RestRouterOptions,
 } from './router';
 import {DefaultSequence, SequenceFunction, SequenceHandler} from './sequence';
 import {
@@ -205,6 +206,10 @@ export class RestServer extends Context implements Server, HttpServerLike {
       this.sequence(config.sequence);
     }
 
+    if (config.router) {
+      this.bind(RestBindings.ROUTER_OPTIONS).to(config.router);
+    }
+
     this.basePath(config.basePath);
 
     this.bind(RestBindings.BASE_PATH).toDynamicValue(() => this._basePath);
@@ -252,6 +257,9 @@ export class RestServer extends Context implements Server, HttpServerLike {
     const settings = this.config.expressSettings || {};
     for (const key in settings) {
       this._expressApp.set(key, settings[key]);
+    }
+    if (this.config.router && typeof this.config.router.strict === 'boolean') {
+      this._expressApp.set('strict routing', this.config.router.strict);
     }
   }
 
@@ -966,6 +974,7 @@ export interface RestServerOptions {
   sequence?: Constructor<SequenceHandler>;
   // tslint:disable-next-line:no-any
   expressSettings?: {[name: string]: any};
+  router?: RestRouterOptions;
 }
 
 /**
