@@ -7,7 +7,7 @@ import {Application, Component, Provider} from '@loopback/core';
 import {expect} from '@loopback/testlab';
 import {Class, ServiceMixin} from '../../../';
 
-// tslint:disable:no-any
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 describe('ServiceMixin', () => {
   it('mixed class has .serviceProvider()', () => {

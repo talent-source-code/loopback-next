@@ -25,7 +25,7 @@ Run the following command to install the CLI.
             --applicationName  # Application name
             --description      # Description for the application
             --outdir           # Project root directory for the application
-            --tslint           # Enable tslint
+            --eslint           # Enable eslint
             --prettier         # Enable prettier
             --mocha            # Enable mocha
             --loopbackBuild    # Use @loopback/build
@@ -48,7 +48,7 @@ Run the following command to install the CLI.
             --skip-install   # Do not automatically install dependencies  Default: false
             --description    # Description for the extension
             --outdir         # Project root directory for the extension
-            --tslint         # Enable tslint
+            --eslint         # Enable eslint
             --prettier       # Enable prettier
             --mocha          # Enable mocha
             --loopbackBuild  # Use @loopback/build

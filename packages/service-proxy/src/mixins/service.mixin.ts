@@ -16,7 +16,7 @@ import {Application} from '@loopback/core';
  */
 export interface Class<T> {
   // new MyClass(...args) ==> T
-  // tslint:disable-next-line:no-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   new (...args: any[]): T;
 }
 
@@ -33,11 +33,11 @@ export interface Class<T> {
  * called <a href="#ServiceMixinDoc">ServiceMixinDoc</a>
  *
  */
-// tslint:disable-next-line:no-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function ServiceMixin<T extends Class<any>>(superClass: T) {
   return class extends superClass {
     // A mixin class has to take in a type any[] argument!
-    // tslint:disable-next-line:no-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     constructor(...args: any[]) {
       super(...args);
     }
@@ -129,7 +129,7 @@ export function ServiceMixin<T extends Class<any>>(superClass: T) {
  * Interface for an Application mixed in with ServiceMixin
  */
 export interface ApplicationWithServices extends Application {
-  // tslint:disable-next-line:no-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   serviceProvider<S>(provider: Class<Provider<S>>, name?: string): Binding<S>;
   component(component: Class<{}>, name?: string): Binding;
   mountComponentServices(component: Class<{}>): void;
@@ -143,7 +143,7 @@ export interface ApplicationWithServices extends Application {
  * <a href="#ServiceMixin">ServiceMixin</a>
  */
 export class ServiceMixinDoc {
-  // tslint:disable-next-line:no-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(...args: any[]) {
     throw new Error(
       'This is a dummy class created for apidoc! Please do not use it!',

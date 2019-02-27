@@ -70,7 +70,7 @@ export class Bootstrapper {
     // We use _bindBooter so this Class can be used without the Mixin
     if (execOptions && execOptions.booters) {
       execOptions.booters.forEach(booter =>
-        // tslint:disable-next-line:no-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         _bindBooter(this.app, booter),
       );
     }
