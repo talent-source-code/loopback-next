@@ -582,7 +582,7 @@ describe('sync constructor & async property injection', () => {
   });
 });
 
-function customDecorator(def: Object) {
+function customDecorator(def: object) {
   return inject('foo', def, (c: Context, injection: Injection) => {
     const barKey = injection.metadata && injection.metadata.x;
     const b = c.getSync(barKey);
@@ -591,7 +591,7 @@ function customDecorator(def: Object) {
   });
 }
 
-function customAsyncDecorator(def: Object) {
+function customAsyncDecorator(def: object) {
   return inject('foo', def, async (c: Context, injection: Injection) => {
     const barKey = injection.metadata && injection.metadata.x;
     const b = await c.get(barKey);

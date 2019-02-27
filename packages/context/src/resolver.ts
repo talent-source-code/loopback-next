@@ -131,7 +131,7 @@ function resolve<T>(
  * @param nonInjectedArgs Optional array of args for non-injected parameters
  */
 export function resolveInjectedArguments(
-  target: Object,
+  target: object,
   method: string,
   ctx: Context,
   session?: ResolutionSession,
@@ -206,7 +206,7 @@ export function resolveInjectedArguments(
  * @param nonInjectedArgs Optional array of args for non-injected parameters
  */
 export function invokeMethod(
-  target: Object,
+  target: object,
   method: string,
   ctx: Context,
   // tslint:disable-next-line:no-any

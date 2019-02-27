@@ -87,11 +87,11 @@ export class Bootstrapper {
     const bindings = bootCtx.findByTag(BootBindings.BOOTER_TAG);
 
     // Prefix length. +1 because of `.` => 'booters.'
-    const prefix_length = BootBindings.BOOTER_PREFIX.length + 1;
+    const prefixLength = BootBindings.BOOTER_PREFIX.length + 1;
 
     // Names of all registered booters.
     const defaultBooterNames = bindings.map(binding =>
-      binding.key.slice(prefix_length),
+      binding.key.slice(prefixLength),
     );
 
     // Determing the booters to be run. If a user set a booters filter (class
@@ -105,7 +105,7 @@ export class Bootstrapper {
 
     // Filter bindings by names
     const filteredBindings = bindings.filter(binding =>
-      names.includes(binding.key.slice(prefix_length)),
+      names.includes(binding.key.slice(prefixLength)),
     );
 
     // Resolve Booter Instances
