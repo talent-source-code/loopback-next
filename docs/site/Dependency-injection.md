@@ -301,6 +301,41 @@ Error: Circular dependency detected:
   lead
 ```
 
+## Dependency injection for SINGLETON bindings
+
+Dependency injection for bindings in `SINGLETON` scope is resolved using the
+owner context instead of the current one. This is needed to ensure that resolved
+singleton bindings won't have dependencies from descendant contexts, which can
+be closed before the owner context. The singleton cannot have dangling
+references to values from the child context. For example:
+
+```ts
+class MyService {
+  constructor(@inject('logger') private logger: Logger) {}
+}
+
+const serverCtx = new Context('server');
+serverCtx
+  .bind('my-service')
+  .toClass(MyService)
+  .inScope(BindingScope.SINGLETON);
+
+serverCtx.bind('logger').toClass(ServerLogger);
+```
+
+Now we create a new context per request:
+
+```ts
+const requestCtx = new Context(serverCtx, 'request');
+requestCtx.bind('logger').toClass(RequestLogger);
+
+const myService = await requestCtx.get<MyService>('my-service');
+// myService.logger should be an instance of `ServerLogger` instead of `RequestLogger`
+
+requestCtx.close();
+// myService survives as it's a singleton
+```
+
 ## Additional resources
 
 - [Dependency Injection](https://en.wikipedia.org/wiki/Dependency_injection) on

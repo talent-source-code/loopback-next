@@ -4,26 +4,25 @@
 // License text available at https://opensource.org/licenses/MIT
 
 import {DecoratorFactory} from '@loopback/metadata';
+import * as assert from 'assert';
+import * as debugModule from 'debug';
+import {BindingScope} from './binding';
 import {Context} from './context';
-import {
-  BoundValue,
-  Constructor,
-  ValueOrPromise,
-  MapObject,
-  resolveList,
-  resolveMap,
-  transformValueOrPromise,
-} from './value-promise';
-
 import {
   describeInjectedArguments,
   describeInjectedProperties,
   Injection,
 } from './inject';
 import {ResolutionSession} from './resolution-session';
-
-import * as assert from 'assert';
-import * as debugModule from 'debug';
+import {
+  BoundValue,
+  Constructor,
+  MapObject,
+  resolveList,
+  resolveMap,
+  transformValueOrPromise,
+  ValueOrPromise,
+} from './value-promise';
 
 const debug = debugModule('loopback:context:resolver');
 const getTargetName = DecoratorFactory.getTargetName;
@@ -76,6 +75,40 @@ export function instantiateClass<T>(
 }
 
 /**
+ * If the scope of current binding is `SINGLETON`, reset the context
+ * to be the one that owns the current binding to make sure a singleton
+ * does not have dependencies injected from child contexts unless the
+ * injection is for method (excluding constructor) parameters.
+ */
+function resolveContext(
+  ctx: Context,
+  injection: Readonly<Injection>,
+  session?: ResolutionSession,
+) {
+  const currentBinding = session && session.currentBinding;
+  if (
+    currentBinding == null ||
+    currentBinding.scope !== BindingScope.SINGLETON
+  ) {
+    // No current binding or its scope is not `SINGLETON`
+    return ctx;
+  }
+
+  const isConstructorOrPropertyInjection =
+    // constructor injection
+    !injection.member ||
+    // property injection
+    typeof injection.methodDescriptorOrParameterIndex !== 'number';
+
+  if (isConstructorOrPropertyInjection) {
+    // Set context to the owner context of the current binding for constructor
+    // or property injections against a singleton
+    ctx = ctx.getOwnerContext(currentBinding.key)!;
+  }
+  return ctx;
+}
+
+/**
  * Resolve the value or promise for a given injection
  * @param ctx Context
  * @param injection Descriptor of the injection
@@ -93,6 +126,8 @@ function resolve<T>(
       ResolutionSession.describeInjection(injection),
     );
   }
+
+  ctx = resolveContext(ctx, injection, session);
   let resolved = ResolutionSession.runWithInjection(
     s => {
       if (injection.resolve) {
