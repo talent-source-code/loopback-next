@@ -29,6 +29,12 @@ describe('Binding', () => {
     it('sets the binding lock state to unlocked by default', () => {
       expect(binding.isLocked).to.be.false();
     });
+
+    it('leaves other states to `undefined` by default', () => {
+      expect(binding.scope).to.be.undefined();
+      expect(binding.type).to.be.undefined();
+      expect(binding.valueConstructor).to.be.undefined();
+    });
   });
 
   describe('lock', () => {
@@ -76,8 +82,8 @@ describe('Binding', () => {
   });
 
   describe('inScope', () => {
-    it('defaults the transient binding scope', () => {
-      expect(binding.scope).to.equal(BindingScope.TRANSIENT);
+    it('defaults to `undefined` binding scope', () => {
+      expect(binding.scope).to.be.undefined();
     });
 
     it('sets the singleton binding scope', () => {

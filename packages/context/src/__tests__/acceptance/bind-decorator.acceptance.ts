@@ -35,6 +35,12 @@ describe('@bind - customize classes with binding attributes', () => {
   })
   class MyController {}
 
+  @bind({
+    scope: BindingScope.SINGLETON,
+    tags: ['controller', {name: 'my-singleton-controller', type: 'controller'}],
+  })
+  class MySingletonController {}
+
   const discoveredClasses = [MyService, MyDateProvider, MyController];
 
   it('allows discovery of classes to be bound', () => {
@@ -71,5 +77,21 @@ describe('@bind - customize classes with binding attributes', () => {
       'my-date-provider',
       'controllers.my-controller',
     ]);
+  });
+
+  it('honors binding scope from @bind', () => {
+    let binding = createBindingFromClass(MySingletonController, {
+      defaultScope: BindingScope.TRANSIENT,
+    });
+    expect(binding.scope).to.equal(BindingScope.SINGLETON);
+    binding = createBindingFromClass(MySingletonController);
+    expect(binding.scope).to.equal(BindingScope.SINGLETON);
+  });
+
+  it('supports default binding scope in options', () => {
+    const binding = createBindingFromClass(MyController, {
+      defaultScope: BindingScope.SINGLETON,
+    });
+    expect(binding.scope).to.equal(BindingScope.SINGLETON);
   });
 });

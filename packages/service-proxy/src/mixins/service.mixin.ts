@@ -75,7 +75,8 @@ export function ServiceMixin<T extends Class<any>>(superClass: T) {
         name: serviceName,
         namespace: 'services',
         type: 'service',
-      }).inScope(BindingScope.SINGLETON);
+        defaultScope: BindingScope.SINGLETON,
+      });
       this.add(binding);
       return binding;
     }

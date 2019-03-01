@@ -141,18 +141,23 @@ export class Binding<T = BoundValue> {
   /**
    * Map for tag name/value pairs
    */
-
   public readonly tagMap: TagMap = {};
 
+  private _scope?: BindingScope;
   /**
    * Scope of the binding to control how the value is cached/shared
    */
-  public scope: BindingScope = BindingScope.TRANSIENT;
+  public get scope(): BindingScope | undefined {
+    return this._scope;
+  }
 
+  private _type?: BindingType;
   /**
    * Type of the binding value getter
    */
-  public type: BindingType;
+  public get type(): BindingType | undefined {
+    return this._type;
+  }
 
   private _cache: WeakMap<Context, T>;
   private _getValue: (
@@ -160,11 +165,14 @@ export class Binding<T = BoundValue> {
     session?: ResolutionSession,
   ) => ValueOrPromise<T>;
 
+  private _valueConstructor?: Constructor<T>;
   /**
    * For bindings bound via toClass, this property contains the constructor
    * function
    */
-  public valueConstructor: Constructor<T>;
+  public get valueConstructor(): Constructor<T> | undefined {
+    return this._valueConstructor;
+  }
 
   constructor(key: string, public isLocked: boolean = false) {
     BindingKey.validate(key);
@@ -190,6 +198,7 @@ export class Binding<T = BoundValue> {
         // Cache the value at the current context
         this._cache.set(ctx, val);
       }
+      // Do not cache for `TRANSIENT`
       return val;
     });
   }
@@ -303,7 +312,7 @@ export class Binding<T = BoundValue> {
   }
 
   inScope(scope: BindingScope): this {
-    this.scope = scope;
+    this._scope = scope;
     return this;
   }
 
@@ -345,7 +354,7 @@ export class Binding<T = BoundValue> {
     if (debug.enabled) {
       debug('Bind %s to constant:', this.key, value);
     }
-    this.type = BindingType.CONSTANT;
+    this._type = BindingType.CONSTANT;
     this._getValue = () => value;
     return this;
   }
@@ -373,7 +382,7 @@ export class Binding<T = BoundValue> {
     if (debug.enabled) {
       debug('Bind %s to dynamic value:', this.key, factoryFn);
     }
-    this.type = BindingType.DYNAMIC_VALUE;
+    this._type = BindingType.DYNAMIC_VALUE;
     this._getValue = ctx => factoryFn();
     return this;
   }
@@ -399,7 +408,7 @@ export class Binding<T = BoundValue> {
     if (debug.enabled) {
       debug('Bind %s to provider %s', this.key, providerClass.name);
     }
-    this.type = BindingType.PROVIDER;
+    this._type = BindingType.PROVIDER;
     this._getValue = (ctx, session) => {
       const providerOrPromise = instantiateClass<Provider<T>>(
         providerClass,
@@ -423,9 +432,9 @@ export class Binding<T = BoundValue> {
     if (debug.enabled) {
       debug('Bind %s to class %s', this.key, ctor.name);
     }
-    this.type = BindingType.CLASS;
+    this._type = BindingType.CLASS;
     this._getValue = (ctx, session) => instantiateClass(ctor, ctx!, session);
-    this.valueConstructor = ctor;
+    this._valueConstructor = ctor;
     return this;
   }
 
@@ -457,7 +466,7 @@ export class Binding<T = BoundValue> {
     // tslint:disable-next-line:no-any
     const json: {[name: string]: any} = {
       key: this.key,
-      scope: this.scope,
+      scope: this.scope || BindingScope.TRANSIENT,
       tags: this.tagMap,
       isLocked: this.isLocked,
     };
