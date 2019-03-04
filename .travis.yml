@@ -42,3 +42,4 @@ branches:
   only:
     - master
     - /^greenkeeper/.*$/
+    - test/gather-timing-info-on-travis # temporary, remove before merging!
