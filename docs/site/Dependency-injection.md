@@ -301,20 +301,55 @@ Error: Circular dependency detected:
   lead
 ```
 
-## Dependency injection for SINGLETON bindings
+## Dependency injection for bindings with different scopes
 
-Dependency injection for bindings in `SINGLETON` scope is resolved using the
-owner context instead of the current one. This is needed to ensure that resolved
-singleton bindings won't have dependencies from descendant contexts, which can
-be closed before the owner context. The singleton cannot have dangling
-references to values from the child context. For example:
+Contexts can form a chain and bindings can be registered at different levels.
+The binding scope controls not only how bound values are cached, but also how
+its dependencies are resolved.
+
+Let's take a look at the following example:
+
+![binding-scopes](../img/binding-scopes.png)
+
+The corresponding code is:
 
 ```ts
+import {inject, Context, BindingScope} from '@loopback/context';
+import {RestBindings} from '@loopback/rest';
+
+interface Logger() {
+  log(message: string);
+}
+
+class PingController {
+  constructor(@inject('logger') private logger: Logger) {}
+}
+
 class MyService {
   constructor(@inject('logger') private logger: Logger) {}
 }
 
-const serverCtx = new Context('server');
+class ServerLogger implements Logger {
+  log(message: string) {
+    console.log('server: %s', message);
+  }
+}
+
+class RequestLogger implements Logger {
+  // Inject the http request
+  constructor(@inject(RestBindings.Http.REQUEST) private req: Request) {}
+  log(message: string) {
+    console.log('%s: %s', this.req.url, message);
+  }
+}
+
+const appCtx = new Context('application');
+appCtx
+  .bind('controllers.PingController')
+  .toClass(PingController)
+  .inScope(BindingScope.TRANSIENT);
+
+const serverCtx = new Context(appCtx, 'server');
 serverCtx
   .bind('my-service')
   .toClass(MyService)
@@ -322,6 +357,9 @@ serverCtx
 
 serverCtx.bind('logger').toClass(ServerLogger);
 ```
+
+Please note that `my-service` is a `SINGLETON` for the `server` context subtree
+and it expects a `logger` to be injected.
 
 Now we create a new context per request:
 
@@ -336,9 +374,45 @@ requestCtx.close();
 // myService survives as it's a singleton
 ```
 
+Dependency injection for bindings in `SINGLETON` scope is resolved using the
+owner context instead of the current one. This is needed to ensure that resolved
+singleton bindings won't have dependencies from descendant contexts, which can
+be closed before the owner context. The singleton cannot have dangling
+references to values from the child context.
+
+The story is different for `PingController` as its binding scope is `TRANSIENT`.
+
+```ts
+const requestCtx = new Context(serverCtx, 'request');
+requestCtx.bind('logger').toClass(RequestLogger);
+
+const pingController = await requestCtx.get<PingController>(
+  'controllers.PingController',
+);
+// pingController.logger should be an instance of `RequestLogger` instead of `ServerLogger`
+```
+
+A new instance of `PingController` is created for each invocation of
+`await requestCtx.get<PingController>('controllers.PingController')` and its
+`logger` is injected to an instance of `RequestLogger` so that it can log
+information (such as `url` or `request-id`) for the `request`.
+
+The following table illustrates how bindings and their dependencies are
+resolved.
+
+| Code                                         | Binding                                | Resolution Context | Owner Context | Cache Context | Dependency              |
+| -------------------------------------------- | -------------------------------------- | ------------------ | ------------- | ------------- | ----------------------- |
+| requestCtx.get('my-service')                 | my-service (SINGLETON)                 | requestCtx         | serverCtx     | serverCtx     | logger -> ServerLogger  |
+| serverCtx.get('my-service')                  | my-service (SINGLETON)                 | serverCtx          | serverCtx     | serverCtx     | logger -> ServerLogger  |
+| requestCtx.get('controllers.PingController') | controllers.PingController (TRANSIENT) | requestCtx         | appCtx        | N/A           | logger -> RequestLogger |
+
 ## Additional resources
 
 - [Dependency Injection](https://en.wikipedia.org/wiki/Dependency_injection) on
   Wikipedia
 - [Dependency Inversion Principle](https://en.wikipedia.org/wiki/Dependency_inversion_principle)
   on Wikipedia
+
+```
+
+```
