@@ -170,7 +170,34 @@ export class OperationSpecBuilder extends BuilderBase<OperationObject> {
    * @param name The name of the controller method implementing this operation.
    */
   withOperationName(name: string): this {
-    return this.withExtension('x-operation-name', name);
+    this.withExtension('x-operation-name', name);
+    this.setupOperationId();
+    return this;
+  }
+
+  /**
+   * Define the controller name (controller name).
+   *
+   * @param name The name of the controller containing this operation.
+   */
+  withControllerName(name: string): this {
+    this.withExtension('x-controller-name', name);
+    this.setupOperationId();
+    return this;
+  }
+
+  private setupOperationId() {
+    if (this._spec.operationId) return;
+    const controllerName = this._spec['x-controller-name'];
+    const operationName = this._spec['x-operation-name'];
+    if (controllerName && operationName) {
+      this._spec.operationId = controllerName + '$' + operationName;
+    }
+  }
+
+  withOperationId(operationId: string): this {
+    this._spec.operationId = operationId;
+    return this;
   }
 
   /**

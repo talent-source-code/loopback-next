@@ -186,6 +186,15 @@ function resolveControllerSpec(constructor: Function): ControllerSpec {
     }
 
     operationSpec['x-operation-name'] = op;
+    operationSpec['x-controller-name'] =
+      operationSpec['x-controller-name'] || constructor.name;
+
+    if (operationSpec.operationId == null) {
+      operationSpec.operationId =
+        operationSpec['x-controller-name'] +
+        '$' +
+        operationSpec['x-operation-name'];
+    }
 
     if (!spec.paths[path]) {
       spec.paths[path] = {};
